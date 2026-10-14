@@ -11,10 +11,9 @@
   <body>
     <aside class="sidebar" aria-label="工作台导航">
       <div class="brand">
-        <span class="brand-mark" aria-hidden="true">≋</span
-        ><span><strong>深海观测</strong><small>时序建模工作台</small></span>
+        <span class="brand-mark" aria-hidden="true">≋</span>
+        <strong>深海观测</strong>
       </div>
-      <div class="side-label">工作流程 / WORKFLOW</div>
       <nav class="nav" aria-label="页面">
         <button
           type="button"
@@ -22,30 +21,18 @@
           data-page="train"
           aria-current="page"
         >
-          <span class="nav-number">01</span>模型训练
+          模型训练
         </button>
         <button type="button" class="nav-item" data-page="analyze">
-          <span class="nav-number">02</span>数据分析
+          数据分析
         </button>
         <button type="button" class="nav-item" data-page="forecast">
-          <span class="nav-number">03</span>未来预测
+          未来预测
         </button>
       </nav>
-      <div class="side-foot">
-        <span class="signal" aria-hidden="true"></span>本地运行 · CPU 模型<br /><span
-          class="side-muted"
-          >观测数据不离开本机服务</span
-        >
-      </div>
     </aside>
 
     <main class="main">
-      <header class="topbar">
-        <span>OCEAN OBSERVATION / RESEARCH WORKSPACE</span
-        ><span class="topbar-right"
-          >本地时序实验室 <span aria-hidden="true">↗</span></span
-        >
-      </header>
       <div
         id="global-message"
         class="notice"
@@ -57,25 +44,21 @@
       <section id="page-train" class="page" aria-labelledby="heading-train">
         <div class="page-intro">
           <div>
-            <p class="eyebrow">01 / OBSERVATIONS → MODEL</p>
             <h1 id="heading-train">模型训练</h1>
             <p class="lede">
               导入真实观测，设定时序窗口，在本机训练并保存 LSTM 模型。
             </p>
           </div>
-          <div class="intro-index" aria-hidden="true">01<span> / 03</span></div>
         </div>
         <div class="schema-strip">
-          <span class="schema-label"
-            >必需字段 <span aria-hidden="true">↗</span></span
-          ><code>timestamp</code><code>site</code><code>depth_m</code
-          ><code>temperature_c</code><code>dissolved_oxygen_mg_l</code>
+          <span class="schema-label">必需字段</span>
+          <code>timestamp</code><code>site</code><code>depth_m</code>
+          <code>temperature_c</code><code>dissolved_oxygen_mg_l</code>
         </div>
         <div class="two-column">
           <div class="stack">
             <section class="panel" aria-labelledby="upload-title">
               <div class="panel-heading">
-                <span class="panel-step">数据导入</span>
                 <h2 id="upload-title">导入观测文件</h2>
               </div>
               <p class="muted">
@@ -155,7 +138,6 @@
             </section>
             <section class="panel" aria-labelledby="dataset-title">
               <div class="panel-heading">
-                <span class="panel-step">数据概览</span>
                 <h2 id="dataset-title">观测数据概览</h2>
               </div>
               <label for="train-dataset" class="field-label">训练数据集</label
@@ -173,7 +155,6 @@
           <div class="stack">
             <section class="panel" aria-labelledby="config-title">
               <div class="panel-heading">
-                <span class="panel-step">时序参数</span>
                 <h2 id="config-title">设置时序窗口</h2>
               </div>
               <p class="muted">
@@ -243,7 +224,6 @@
             </section>
             <section class="panel" aria-labelledby="models-title">
               <div class="panel-heading">
-                <span class="panel-step">模型档案</span>
                 <h2 id="models-title">已保存模型</h2>
               </div>
               <label for="train-model" class="field-label"
@@ -263,13 +243,11 @@
       >
         <div class="page-intro">
           <div>
-            <p class="eyebrow">02 / HISTORICAL REPLAY</p>
             <h1 id="heading-analyze">数据分析</h1>
             <p class="lede">
               对导入的历史观测进行逐窗口回放，比较模型目标时刻预测与真实测量值。
             </p>
           </div>
-          <div class="intro-index" aria-hidden="true">02<span> / 03</span></div>
         </div>
         <div class="callout callout-caution">
           <strong>解读边界</strong
@@ -280,7 +258,6 @@
         <div class="two-column selection-layout">
           <section class="panel" aria-labelledby="analysis-import-title">
             <div class="panel-heading">
-              <span class="panel-step">历史导入</span>
               <h2 id="analysis-import-title">导入待分析的历史观测</h2>
             </div>
             <form id="analysis-upload-form" class="upload-form">
@@ -366,7 +343,6 @@
           </section>
           <section class="panel" aria-labelledby="analysis-select-title">
             <div class="panel-heading">
-              <span class="panel-step">回放设置</span>
               <h2 id="analysis-select-title">选择数据与模型</h2>
             </div>
             <form id="analysis-form" class="selection-form">
@@ -448,10 +424,7 @@
           aria-labelledby="analysis-results-title"
         >
           <div class="results-heading">
-            <div>
-              <p class="eyebrow">HISTORICAL COMPARISON</p>
-              <h2 id="analysis-results-title">回放结果</h2>
-            </div>
+            <h2 id="analysis-results-title">回放结果</h2>
             <button
               id="analysis-export"
               type="button"
@@ -477,13 +450,11 @@
       >
         <div class="page-intro">
           <div>
-            <p class="eyebrow">03 / OBSERVED → FORECAST</p>
             <h1 id="heading-forecast">未来预测</h1>
             <p class="lede">
               以选定站点与水深的最新观测为输入，延展水温和溶解氧时序。
             </p>
           </div>
-          <div class="intro-index" aria-hidden="true">03<span> / 03</span></div>
         </div>
         <div class="callout">
           <strong>时序说明</strong
@@ -493,7 +464,6 @@
         </div>
         <section class="panel" aria-labelledby="forecast-select-title">
           <div class="panel-heading">
-            <span class="panel-step">预测设置</span>
             <h2 id="forecast-select-title">选择数据与模型</h2>
           </div>
           <form id="forecast-form" class="selection-form inline-form">
@@ -579,10 +549,7 @@
           aria-labelledby="forecast-results-title"
         >
           <div class="results-heading">
-            <div>
-              <p class="eyebrow">FORECAST EXTENSION</p>
-              <h2 id="forecast-results-title">观测与未来时序</h2>
-            </div>
+            <h2 id="forecast-results-title">观测与未来时序</h2>
             <div class="export-actions">
               <a
                 id="forecast-csv"
@@ -608,9 +575,6 @@
           </div>
         </section>
       </section>
-      <footer class="footer">
-        DEEP SEA OBSERVATION <span>·</span> 本地时序建模
-      </footer>
     </main>
   </body>
 </html>
