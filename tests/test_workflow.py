@@ -117,6 +117,32 @@ class WorkflowTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "Duplicate or out-of-order timestamps"):
                 read_observations(path)
 
+    def test_independent_year_mode_uses_earlier_years_only_for_fitting(self) -> None:
+        dates = pd.date_range("2020-01-01", "2022-12-31", freq="D")
+        index = np.arange(len(dates))
+        observations = pd.DataFrame({
+            "timestamp": dates,
+            "site": "sensor-one",
+            "depth_m": 12.0,
+            "temperature_c": 12 + 0.01 * index + 0.3 * np.sin(index / 20),
+            "dissolved_oxygen_mg_l": 8.2 - 0.003 * index + 0.1 * np.cos(index / 30),
+        })
+        with tempfile.TemporaryDirectory() as directory:
+            summary = train_lstm(observations, Path(directory) / "by_year", lookback=12,
+                                 horizon=4, epochs=1, split_mode="year_holdout")
+            periods = summary["sites"][0]["split_periods"]
+            self.assertEqual(periods["train"]["years"], [2020])
+            self.assertEqual(periods["validation"]["years"], [2021])
+            self.assertEqual(periods["test"]["years"], [2022])
+            self.assertEqual(summary["split_mode"], "year_holdout")
+            np.testing.assert_allclose(
+                summary["normalization"]["mean"],
+                observations.loc[observations["timestamp"].dt.year == 2020,
+                                 ["temperature_c", "dissolved_oxygen_mg_l"]].mean().to_numpy(),
+            )
+            with self.assertRaisesRegex(ValueError, "at least three calendar years"):
+                train_lstm(self.observations(), Path(directory) / "single_year", split_mode="year_holdout")
+
 
 if __name__ == "__main__":
     unittest.main()

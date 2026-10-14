@@ -20,7 +20,8 @@ body {
 }
 button,
 input,
-select {
+select,
+textarea {
   font: inherit;
 }
 button {
@@ -324,6 +325,38 @@ h2 {
   display: grid;
   gap: 11px;
 }
+.provenance-fields,
+.rule-fields {
+  min-width: 0;
+  margin: 4px 0 0;
+  padding: 13px;
+  border: 1px solid #d8e6e1;
+  border-radius: 6px;
+  display: grid;
+  gap: 10px;
+}
+.provenance-fields legend,
+.rule-fields legend {
+  padding: 0 5px;
+  color: #36545c;
+  font-size: 12px;
+  font-weight: 700;
+}
+.provenance-fields .field-hint,
+.rule-fields .field-hint {
+  margin: 0;
+}
+.unit-confirm {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 12px;
+  color: #36545c;
+  line-height: 1.6;
+}
+.unit-confirm input {
+  margin-top: 3px;
+}
 .upload-form input[type="file"] {
   max-width: 100%;
   background: #f7faf8;
@@ -383,7 +416,9 @@ h2 {
   margin-top: 20px;
 }
 .select,
-.config-grid input {
+.config-grid input,
+.provenance-fields input:not([type="checkbox"]),
+.rule-fields input {
   display: block;
   width: 100%;
   height: 42px;
@@ -403,6 +438,17 @@ h2 {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px;
+}
+.split-select {
+  margin-top: 13px;
+}
+.rule-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+.forecast-rule {
+  grid-column: 1 / -1;
 }
 .form-status:not(:empty) {
   font-size: 12px;
@@ -529,6 +575,7 @@ h2 {
 }
 .data-table td {
   color: #34525b;
+  overflow-wrap: anywhere;
 }
 .data-table tbody tr:hover {
   background: #f8fbfa;
@@ -665,6 +712,7 @@ h2 {
   color: #3f6767;
   font-size: 12px;
   line-height: 1.7;
+  overflow-wrap: anywhere;
 }
 .result-note.caution {
   background: #fff7e9;
@@ -730,6 +778,9 @@ h2 {
     padding: 0 27px;
   }
   .inline-form {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .rule-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
   .inline-form .button {
@@ -869,6 +920,9 @@ h2 {
     grid-template-columns: 1fr;
   }
   .field-pair {
+    grid-template-columns: 1fr;
+  }
+  .rule-grid {
     grid-template-columns: 1fr;
   }
   .export-actions {

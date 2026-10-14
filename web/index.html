@@ -79,8 +79,9 @@
                 <h2 id="upload-title">导入观测文件</h2>
               </div>
               <p class="muted">
-                CSV 或
-                XLSX；每组站点与水深须有等间隔的时间序列。导入后可供三个页面使用。
+                CSV 或 XLSX；每组站点与水深须有等间隔的时间序列。示例 NOAA
+                文件的 15
+                分钟间隔仅属于该文件，其他数据按实际时间戳校验。导入后可供三个页面使用。
               </p>
               <form id="train-upload-form" class="upload-form">
                 <label for="train-file" class="field-label">选择本地文件</label
@@ -90,7 +91,59 @@
                   type="file"
                   accept=".csv,.xlsx"
                   required
-                /><button type="submit" class="button button-primary">
+                />
+                <fieldset class="provenance-fields">
+                  <legend>来源与质量说明 · 可留空（留空即未提供）</legend>
+                  <div class="field-pair">
+                    <label class="field-label"
+                      >来源名称<input
+                        name="source_name"
+                        type="text"
+                        placeholder="机构 / 数据产品"
+                    /></label>
+                    <label class="field-label"
+                      >来源链接或引用<input
+                        name="source_reference"
+                        type="text"
+                        placeholder="链接 / 文献编号"
+                    /></label>
+                  </div>
+                  <div class="field-pair">
+                    <label class="field-label"
+                      >水深依据<select name="depth_basis" class="select">
+                        <option value="unknown">未知</option>
+                        <option value="measured">逐时实测</option>
+                        <option value="nominal">名义分组深度</option>
+                      </select></label
+                    >
+                    <label class="field-label"
+                      >来源时区说明<input
+                        name="timezone_note"
+                        type="text"
+                        placeholder="原文件时钟说明（不转换）"
+                    /></label>
+                  </div>
+                  <label class="field-label"
+                    >质控说明<input
+                      name="qc_note"
+                      type="text"
+                      placeholder="来源质控与缺测说明"
+                  /></label>
+                  <p class="field-hint">
+                    仅接收水温 °C、溶解氧 mg/L；%
+                    饱和度必须在模型外依据原始资料转换，不能当作
+                    mg/L。无时区时间按 UTC 解读；填写时区说明不会自动转换时间。
+                  </p>
+                  <label class="unit-confirm"
+                    ><input
+                      name="units_confirmed"
+                      type="checkbox"
+                      required
+                    />确认文件中水温为 °C、溶解氧浓度为 mg/L（不是 %
+                    饱和度）</label
+                  >
+                </fieldset>
+                <button type="submit" class="button button-primary">
                   上传并校验 <span aria-hidden="true">↗</span>
                 </button>
               </form>
@@ -155,6 +208,19 @@
                       required
                   /></label>
                 </div>
+                <label class="field-label split-select" for="split-mode"
+                  >时间切分策略
+                  <select id="split-mode" name="split_mode" class="select">
+                    <option value="chronological">
+                      按时间顺序留出（默认）
+                    </option>
+                    <option value="year_holdout">完整日历年独立留出</option>
+                  </select>
+                </label>
+                <p class="field-hint">
+                  整年留出要求每组至少 3
+                  个可用日历年且窗口足够：末年测试、前年验证、更早年份训练。单年样例不可用于此策略；失败会提示原因。两种策略均仅用训练区间计算归一化。
+                </p>
                 <button
                   id="train-button"
                   type="submit"
@@ -227,7 +293,59 @@
                 type="file"
                 accept=".csv,.xlsx"
                 required
-              /><button type="submit" class="button button-secondary">
+              />
+              <fieldset class="provenance-fields">
+                <legend>来源与质量说明 · 可留空（留空即未提供）</legend>
+                <div class="field-pair">
+                  <label class="field-label"
+                    >来源名称<input
+                      name="source_name"
+                      type="text"
+                      placeholder="机构 / 数据产品"
+                  /></label>
+                  <label class="field-label"
+                    >来源链接或引用<input
+                      name="source_reference"
+                      type="text"
+                      placeholder="链接 / 文献编号"
+                  /></label>
+                </div>
+                <div class="field-pair">
+                  <label class="field-label"
+                    >水深依据<select name="depth_basis" class="select">
+                      <option value="unknown">未知</option>
+                      <option value="measured">逐时实测</option>
+                      <option value="nominal">名义分组深度</option>
+                    </select></label
+                  >
+                  <label class="field-label"
+                    >来源时区说明<input
+                      name="timezone_note"
+                      type="text"
+                      placeholder="原文件时钟说明（不转换）"
+                  /></label>
+                </div>
+                <label class="field-label"
+                  >质控说明<input
+                    name="qc_note"
+                    type="text"
+                    placeholder="来源质控与缺测说明"
+                /></label>
+                <p class="field-hint">
+                  仅接收水温 °C、溶解氧 mg/L；%
+                  饱和度必须在模型外依据原始资料转换，不能当作
+                  mg/L。无时区时间按 UTC 解读；填写时区说明不会自动转换时间。
+                </p>
+                <label class="unit-confirm"
+                  ><input
+                    name="units_confirmed"
+                    type="checkbox"
+                    required
+                  />确认文件中水温为 °C、溶解氧浓度为 mg/L（不是 %
+                  饱和度）</label
+                >
+              </fieldset>
+              <button type="submit" class="button button-secondary">
                 导入并选择文件 <span aria-hidden="true">↗</span>
               </button>
             </form>
@@ -241,6 +359,11 @@
               必需字段：timestamp · site · depth_m · temperature_c ·
               dissolved_oxygen_mg_l
             </p>
+            <div
+              id="analysis-dataset-preview"
+              class="preview"
+              aria-live="polite"
+            ></div>
           </section>
           <section class="panel" aria-labelledby="analysis-select-title">
             <div class="panel-heading">
@@ -276,6 +399,34 @@
                   ></select
                 ></label>
               </div>
+              <fieldset class="rule-fields">
+                <legend>事件定义 · 可选，来源必填</legend>
+                <div class="field-pair">
+                  <label class="field-label"
+                    >水温高于 (°C)<input
+                      name="max_temp_c"
+                      type="number"
+                      step="any"
+                      placeholder="不配置"
+                  /></label>
+                  <label class="field-label"
+                    >溶解氧低于 (mg/L)<input
+                      name="min_do_mg_l"
+                      type="number"
+                      step="any"
+                      placeholder="不配置"
+                  /></label>
+                </div>
+                <label class="field-label"
+                  >限值来源（填写任一限值时必填）<input
+                    name="rule_source"
+                    type="text"
+                    placeholder="现场管理标准 / 资料引用"
+                /></label>
+                <p class="field-hint">
+                  按用户提供的限值比较目标时刻，不代表普遍适用的生理阈值。
+                </p>
+              </fieldset>
               <button
                 id="analysis-button"
                 class="button button-primary button-wide"
@@ -370,8 +521,45 @@
                 id="forecast-depth"
                 class="select"
                 required
-              ></select></label
-            ><button
+              ></select
+            ></label>
+            <fieldset class="rule-fields forecast-rule">
+              <legend>管理限值 · 可选，来源必填</legend>
+              <div class="rule-grid">
+                <label class="field-label"
+                  >水温高于 (°C)<input
+                    name="max_temp_c"
+                    type="number"
+                    step="any"
+                    placeholder="不配置"
+                /></label>
+                <label class="field-label"
+                  >溶解氧低于 (mg/L)<input
+                    name="min_do_mg_l"
+                    type="number"
+                    step="any"
+                    placeholder="不配置"
+                /></label>
+                <label class="field-label"
+                  >限值来源<input
+                    name="rule_source"
+                    type="text"
+                    placeholder="管理依据 / 引用"
+                /></label>
+                <label class="field-label"
+                  >操作所需时间 (分钟)<input
+                    name="action_minutes"
+                    type="number"
+                    min="0"
+                    step="any"
+                    placeholder="不配置"
+                /></label>
+              </div>
+              <p class="field-hint">
+                操作时间用于比较能否赶在预测越限前完成，不参与事件定义。只评估本次预测时域；未发现越限不表示安全。
+              </p>
+            </fieldset>
+            <button
               id="forecast-button"
               type="submit"
               class="button button-primary"
@@ -410,6 +598,10 @@
               >
             </div>
           </div>
+          <p class="field-hint">
+            CSV 仅含原始预测数值；若设置管理限值，XLSX
+            将包含所用限值、来源与提前量。
+          </p>
           <div id="forecast-output" class="result-body">
             <p class="empty-state">
               选择数据集、模型与观测序列后生成预测；这里会并排呈现历史观测和未来数值。

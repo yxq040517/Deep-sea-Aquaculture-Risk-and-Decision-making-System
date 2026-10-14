@@ -9,6 +9,8 @@ const state = {
   forecast: null,
   analysisKey: "",
   forecastKey: "",
+  analysisRule: null,
+  forecastRule: null,
   jobId: "",
   pollTimer: null,
   analysisRequest: 0,
@@ -53,6 +55,7 @@ function notice(message, isError = false) {
 }
 function detailMessage(detail) {
   if (typeof detail === "string") return detail;
+  if (typeof detail?.message === "string") return detail.message;
   if (Array.isArray(detail))
     return detail
       .map((item) =>
@@ -60,6 +63,72 @@ function detailMessage(detail) {
       )
       .join("；");
   return "请求未完成，请检查数据和服务后重试。";
+}
+function given(value) {
+  return value === null || value === undefined || String(value).trim() === ""
+    ? "未提供"
+    : String(value);
+}
+function qualityLines(quality) {
+  if (!quality || typeof quality !== "object") return [];
+  const lines = [];
+  if (quality.duplicate_count !== undefined && quality.duplicate_count !== null)
+    lines.push(`重复记录：${quality.duplicate_count} 条`);
+  if (quality.missing_count !== undefined && quality.missing_count !== null)
+    lines.push(`缺测时间点：${quality.missing_count} 个`);
+  if (Array.isArray(quality.missing_periods)) {
+    lines.push(
+      quality.missing_periods.length
+        ? "缺测区间：" +
+            quality.missing_periods
+              .map(
+                (gap) =>
+                  `${gap.site ?? "站点未知"} / ${gap.depth_m ?? "水深未知"} m ${time(gap.from)} — ${time(gap.to)}（${gap.missing_steps ?? "?"} 步）`,
+              )
+              .join("；")
+        : "缺测区间：未发现",
+    );
+  }
+  return lines;
+}
+function uploadError(error) {
+  const lines = qualityLines(error.quality);
+  return lines.length ? `${error.message}\n${lines.join("\n")}` : error.message;
+}
+function formRule(form, forecast = false) {
+  const rawTemp = form.elements.namedItem("max_temp_c").value.trim();
+  const rawOxygen = form.elements.namedItem("min_do_mg_l").value.trim();
+  const source = form.elements.namedItem("rule_source").value.trim();
+  const rawAction = forecast
+    ? form.elements.namedItem("action_minutes").value.trim()
+    : "";
+  if (!rawTemp && !rawOxygen) {
+    if (rawAction)
+      throw new Error("请先设置至少一个管理限值，再填写操作所需时间。");
+    return null;
+  }
+  if (!source) throw new Error("已设置限值时必须填写限值来源。");
+  const rule = { source };
+  if (rawTemp) rule.max_temp_c = Number(rawTemp);
+  if (rawOxygen) rule.min_do_mg_l = Number(rawOxygen);
+  if (rawAction) rule.action_minutes = Number(rawAction);
+  if (
+    Object.entries(rule).some(
+      ([key, value]) => key !== "source" && !Number.isFinite(value),
+    )
+  )
+    throw new Error("限值和操作时间必须是有效数字。");
+  if (rawAction && rule.action_minutes < 0)
+    throw new Error("操作所需时间不能为负数。");
+  return rule;
+}
+function ruleKey(form) {
+  return JSON.stringify([
+    form.elements.namedItem("max_temp_c").value.trim(),
+    form.elements.namedItem("min_do_mg_l").value.trim(),
+    form.elements.namedItem("rule_source").value.trim(),
+    form.elements.namedItem("action_minutes")?.value.trim() ?? "",
+  ]);
 }
 async function request(url, options) {
   let response;
@@ -75,7 +144,11 @@ async function request(url, options) {
   } catch {
     throw new Error("服务返回的内容无法解析，请检查本地服务状态。");
   }
-  if (!response.ok) throw new Error(detailMessage(data.detail || data.error));
+  if (!response.ok) {
+    const error = new Error(detailMessage(data.detail || data.error));
+    error.quality = data.quality || data.detail?.quality;
+    throw error;
+  }
   return data;
 }
 function postJSON(url, body) {
@@ -206,6 +279,7 @@ function clearResults() {
   state.forecastRequest++;
   state.analysis = state.forecast = null;
   state.analysisKey = state.forecastKey = "";
+  state.analysisRule = state.forecastRule = null;
   empty(
     $("analysis-output"),
     "选择已导入的观测数据及模型后运行回放，这里将显示目标时刻的实测值、模型值及误差。",
@@ -272,42 +346,136 @@ function makeTable(columns, rows) {
   return wrap;
 }
 function renderDatasetPreview() {
-  const target = $("dataset-preview");
-  target.replaceChildren();
-  const item = currentDataset();
-  if (!item) {
-    empty(
-      target,
-      "尚无可预览的数据。请上传 CSV / XLSX 观测文件，或选择已导入的数据集。",
+  for (const id of ["dataset-preview", "analysis-dataset-preview"]) {
+    const target = $(id);
+    target.replaceChildren();
+    const item = currentDataset();
+    if (!item) {
+      empty(
+        target,
+        "尚无可预览的数据。请上传 CSV / XLSX 观测文件，或选择已导入的数据集。",
+      );
+      continue;
+    }
+    const quality = item.quality || {};
+    const provenance = item.provenance || {};
+    const basis =
+      {
+        measured: "用户声明逐时实测",
+        nominal: "名义分组深度（非逐时实测）",
+        unknown: "未知（不能视为实测）",
+      }[provenance.depth_basis] || "未知（不能视为实测）";
+    makeStats(target, [
+      ["文件名", item.name],
+      ["观测行数", `${item.rows} 条`],
+      ["时间范围 · UTC", `${time(item.start)} — ${time(item.end)}`],
+      ["采样间隔", item.cadence || "未知"],
+      ["序列数", `${item.series?.length || 0} 组`],
+      ["水深依据", basis],
+      ["来源名称", given(provenance.source_name)],
+      ["来源引用", given(provenance.source_reference)],
+      ["文件 SHA-256", given(item.sha256)],
+      [
+        "重复记录",
+        quality.duplicate_count == null
+          ? "未知"
+          : `${quality.duplicate_count} 条`,
+      ],
+      [
+        "缺测时间点",
+        quality.missing_count == null ? "未知" : `${quality.missing_count} 个`,
+      ],
+    ]);
+    target.append(
+      node(
+        "p",
+        "时间解释：" +
+          given(quality.timezone_interpretation) +
+          "；来源所述时区：" +
+          given(provenance.timezone_note) +
+          "。来源说明不自动转换文件时间；未注明时区的时间按 UTC 解读。",
+        "result-note caution",
+      ),
     );
-    return;
+    target.append(
+      node(
+        "p",
+        "文件值仅按 °C / mg/L 使用；溶解氧 % 饱和度不可直接作为 mg/L。" +
+          (provenance.depth_basis !== "measured"
+            ? " 当前水深并未证实为逐时实测。"
+            : ""),
+        "field-hint",
+      ),
+    );
+    target.append(
+      node("p", "来源质控说明：" + given(provenance.qc_note), "field-hint"),
+    );
+    const gaps = quality.missing_periods;
+    target.append(
+      node(
+        "p",
+        "缺测区间：" +
+          (Array.isArray(gaps)
+            ? gaps.length
+              ? `${gaps.length} 段`
+              : "未发现"
+            : "未知（旧数据未记录）"),
+        "small-heading",
+      ),
+    );
+    if (Array.isArray(gaps) && gaps.length)
+      target.append(
+        makeTable(
+          ["站点", "水深 (m)", "从 · UTC", "到 · UTC", "缺测步数"],
+          gaps.map((gap) => [
+            gap.site ?? "—",
+            number(gap.depth_m, 2),
+            time(gap.from),
+            time(gap.to),
+            gap.missing_steps ?? "—",
+          ]),
+        ),
+      );
+    const flags = quality.qc_flags;
+    target.append(
+      node(
+        "p",
+        "原始质控标记：" +
+          (flags && Object.keys(flags).length
+            ? "文件保留值及频次"
+            : quality.missing_count == null
+              ? "未知（旧数据未记录）"
+              : "文件未提供"),
+        "small-heading",
+      ),
+    );
+    if (flags && Object.keys(flags).length)
+      target.append(
+        makeTable(
+          ["原始标记列", "值与频次"],
+          Object.entries(flags).map(([column, values]) => [
+            column,
+            Object.entries(values || {})
+              .map(([value, count]) => `${value}：${count}`)
+              .join("；") || "—",
+          ]),
+        ),
+      );
+    if (Array.isArray(quality.warnings))
+      for (const warning of quality.warnings)
+        target.append(node("p", warning, "result-note caution"));
+    target.append(node("p", "按站点与水深分组", "small-heading"));
+    target.append(
+      makeTable(
+        ["站点", "水深 (m)", "观测条数"],
+        (item.series || []).map((entry) => [
+          entry.site,
+          number(entry.depth_m, 2),
+          String(entry.observations),
+        ]),
+      ),
+    );
   }
-  makeStats(target, [
-    ["文件名", item.name],
-    ["观测行数", `${item.rows} 条`],
-    ["时间范围", `${time(item.start)} — ${time(item.end)}`],
-    ["采样间隔", item.cadence || "—"],
-    ["序列数", `${item.series?.length || 0} 组`],
-    ["必需字段", "5 列"],
-  ]);
-  target.append(
-    node(
-      "p",
-      "必需字段 · timestamp / site / depth_m / temperature_c / dissolved_oxygen_mg_l",
-      "field-hint",
-    ),
-  );
-  target.append(node("p", "按站点与水深分组", "small-heading"));
-  target.append(
-    makeTable(
-      ["站点", "水深 (m)", "观测条数"],
-      (item.series || []).map((entry) => [
-        entry.site,
-        number(entry.depth_m, 2),
-        String(entry.observations),
-      ]),
-    ),
-  );
 }
 function metricCards(parent, metrics) {
   const grid = node("div", null, "metric-grid");
@@ -325,6 +493,28 @@ function metricCards(parent, metrics) {
     grid.append(box);
   }
   parent.append(grid);
+}
+function baselineCaution(metrics, context) {
+  const weaker = fields
+    .filter(({ key }) => {
+      const value = metrics?.mae?.[key];
+      const baseline = metrics?.naive_mae?.[key];
+      return (
+        typeof value === "number" &&
+        Number.isFinite(value) &&
+        typeof baseline === "number" &&
+        Number.isFinite(baseline) &&
+        value >= baseline
+      );
+    })
+    .map(({ label }) => label);
+  return weaker.length
+    ? node(
+        "p",
+        `${context}的${weaker.join("、")} MAE 未优于末值基线；不能仅凭这次模型输出认定预警可靠。`,
+        "result-note caution",
+      )
+    : null;
 }
 function renderModelPreview() {
   const target = $("model-preview");
@@ -347,8 +537,47 @@ function renderModelPreview() {
     ["训练轮数", summary.epochs ?? "—"],
     ["采样间隔", summary.cadence || "—"],
     ["保存时间", time(model.created_at)],
+    [
+      "切分策略",
+      summary.split_mode === "year_holdout"
+        ? "完整日历年独立留出"
+        : summary.split_mode === "chronological"
+          ? "按时间顺序留出"
+          : "未知（旧模型）",
+    ],
+    ["训练来源 SHA-256", given(summary.training_source_sha256)],
     ["模型类型", summary.model?.type || "—"],
   ]);
+  if (Array.isArray(summary.sites)) {
+    for (const site of summary.sites) {
+      const periods = site.split_periods;
+      if (!periods) continue;
+      target.append(
+        node(
+          "p",
+          `站点 ${given(site.site)} / ${number(site.depth_m, 2)} m · 各时间区间`,
+          "small-heading",
+        ),
+      );
+      target.append(
+        makeTable(
+          ["区间", "开始 · UTC", "结束 · UTC", "涵盖年份"],
+          [
+            ["训练", periods.train],
+            ["验证", periods.validation],
+            ["测试", periods.test],
+          ].map(([label, period]) => [
+            label,
+            time(period?.start),
+            time(period?.end),
+            Array.isArray(period?.years)
+              ? period.years.join("、") || "未知"
+              : "未知",
+          ]),
+        ),
+      );
+    }
+  }
   for (const [key, label] of [
     ["validation", "验证集"],
     ["test", "测试集"],
@@ -359,6 +588,8 @@ function renderModelPreview() {
     else section.append(node("p", "未提供此区间的误差指标。", "field-hint"));
     target.append(section);
   }
+  const caution = baselineCaution(summary.metrics?.test, "留出测试段");
+  if (caution) target.append(caution);
 }
 async function loadCollections() {
   const outcomes = await Promise.allSettled([
@@ -396,6 +627,19 @@ async function upload(formId, inputId, statusId) {
   status(statusId, "正在上传并校验观测文件…");
   try {
     const body = new FormData();
+    const provenance = {
+      depth_basis: form.elements.namedItem("depth_basis").value,
+      temperature_unit: "°C",
+      oxygen_unit: "mg/L",
+    };
+    for (const key of [
+      "source_name",
+      "source_reference",
+      "timezone_note",
+      "qc_note",
+    ])
+      provenance[key] = form.elements.namedItem(key).value.trim();
+    body.append("provenance", JSON.stringify(provenance));
     body.append("file", file);
     const dataset = await request("/api/datasets", { method: "POST", body });
     state.datasets = [
@@ -410,7 +654,7 @@ async function upload(formId, inputId, statusId) {
     );
     form.reset();
   } catch (error) {
-    status(statusId, error.message, true);
+    status(statusId, uploadError(error), true);
   } finally {
     button.disabled = false;
   }
@@ -517,6 +761,7 @@ async function train(event) {
       lookback: values[0],
       horizon: values[1],
       epochs: values[2],
+      split_mode: $("split-mode").value,
     });
     if (!data.job_id) throw new Error("服务未返回训练任务编号。");
     state.jobId = data.job_id;
@@ -764,6 +1009,166 @@ function resultTable(target, columns, rows, limit = 200) {
       ),
     );
 }
+function ruleDescription(rule) {
+  return `限值来源：${rule.source}；${rule.max_temp_c === undefined ? "水温未配置" : `水温高于 ${rule.max_temp_c} °C`}；${rule.min_do_mg_l === undefined ? "溶解氧未配置" : `溶解氧低于 ${rule.min_do_mg_l} mg/L`}。`;
+}
+function evaluation(parent, result, rule) {
+  parent.append(node("p", "按用户限值评价事件 · 目标时刻", "small-heading"));
+  if (!rule) {
+    parent.append(
+      node(
+        "p",
+        "未配置事件定义；无法评价事件命中、漏报或持续时间。",
+        "result-note caution",
+      ),
+    );
+    return;
+  }
+  parent.append(node("p", ruleDescription(rule), "result-note"));
+  if (!result?.by_variable) {
+    parent.append(
+      node("p", "事件评价不可用；不能推断未发生事件。", "result-note caution"),
+    );
+    return;
+  }
+  const titles = {
+    temperature: "水温",
+    oxygen: "溶解氧",
+    combined: "任一限值",
+  };
+  const rows = Object.entries(result.by_variable).map(([key, value]) => [
+    titles[key] || key,
+    value.tp ?? "—",
+    value.fp ?? "—",
+    value.fn ?? "—",
+    value.actual_event_episodes ?? "—",
+    value.predicted_event_episodes ?? "—",
+    value.missed_event_episodes ?? "—",
+    value.false_alarm_episodes ?? "—",
+    number(value.actual_duration_minutes, 1),
+    number(value.predicted_duration_minutes, 1),
+    number(value.duration_bias_minutes, 1),
+    value.precision == null
+      ? "无法计算"
+      : `${number(value.precision * 100, 1)}%`,
+    value.recall == null ? "无法计算" : `${number(value.recall * 100, 1)}%`,
+  ]);
+  if (rows.length)
+    parent.append(
+      makeTable(
+        [
+          "变量",
+          "命中步",
+          "误报步",
+          "漏报步",
+          "实测事件段",
+          "预测事件段",
+          "漏报事件段",
+          "误报事件段",
+          "实测超限分钟",
+          "预测超限分钟",
+          "时长偏差分钟",
+          "精确率",
+          "召回率",
+        ],
+        rows,
+      ),
+    );
+  else
+    parent.append(
+      node(
+        "p",
+        "已配置限值的事件结果未返回，无法计算。",
+        "result-note caution",
+      ),
+    );
+  for (const warning of result.warnings || [])
+    parent.append(node("p", warning, "result-note caution"));
+}
+function leadDisplay(parent, lead, rule) {
+  parent.append(node("p", "用户限值 · 操作提前量", "small-heading"));
+  if (!rule) {
+    parent.append(
+      node("p", "未设管理限值，无法给出提前量。", "result-note caution"),
+    );
+    return;
+  }
+  parent.append(node("p", ruleDescription(rule), "result-note"));
+  if (!lead) {
+    parent.append(
+      node("p", "限值提前量不可用，不能据此判断安全。", "result-note caution"),
+    );
+    return;
+  }
+  if (lead.status === "crossing") {
+    makeStats(parent, [
+      ["首次预测越限 · UTC", time(lead.first_crossing_timestamp)],
+      ["相对末次观测的提前量", `${number(lead.minutes_until, 1)} 分钟`],
+      [
+        "预测生成时可用时间",
+        lead.expired
+          ? "已过期"
+          : `${number(lead.remaining_minutes_at_generation, 1)} 分钟`,
+      ],
+      [
+        "触发变量",
+        (lead.triggered_variables || [])
+          .map(
+            (key) =>
+              ({ temperature_c: "水温", dissolved_oxygen_mg_l: "溶氧" })[key] ||
+              key,
+          )
+          .join("、") || "未知",
+      ],
+      [
+        "执行所需时间",
+        lead.action_minutes == null
+          ? "未提供"
+          : `${number(lead.action_minutes, 1)} 分钟`,
+      ],
+      [
+        "执行时间比较",
+        lead.expired
+          ? "历史预测已过期，不能用于当前行动"
+          : lead.action_feasible == null
+            ? "未提供所需时间，无法比较"
+            : lead.action_feasible
+              ? "生成时剩余时间不少于执行所需时间"
+              : "生成时剩余时间短于执行所需时间",
+      ],
+    ]);
+    if (lead.expired)
+      parent.append(
+        node(
+          "p",
+          "这份观测的预测时间已经过去；仅用于流程演示，不能作实时预警。",
+          "result-note caution",
+        ),
+      );
+  } else if (lead.status === "no_crossing")
+    parent.append(
+      node(
+        "p",
+        "在本次短时预测范围内未发现所设限值的越限；不表示未来安全或无风险。",
+        "result-note caution",
+      ),
+    );
+  else
+    parent.append(
+      node("p", "提前量状态未知，不能据此判断安全。", "result-note caution"),
+    );
+  if (lead.disclaimer) parent.append(node("p", lead.disclaimer, "field-hint"));
+}
+function datasetSource(parent) {
+  const source = currentDataset()?.provenance;
+  parent.append(
+    node(
+      "p",
+      `数据来源：${given(source?.source_name)}；来源引用：${given(source?.source_reference)}；水深依据：${{ measured: "用户声明逐时实测", nominal: "名义分组深度", unknown: "未知" }[source?.depth_basis] || "未知"}。原文件时区说明：${given(source?.timezone_note)}（填写说明不自动转换时间）。`,
+      "field-hint",
+    ),
+  );
+}
 function renderAnalysis(data) {
   const target = $("analysis-output");
   target.replaceChildren();
@@ -773,10 +1178,27 @@ function renderAnalysis(data) {
     ["采样间隔", data.cadence || "—"],
     ["对照方式", "目标时刻实测 vs 模型"],
   ]);
+  datasetSource(target);
   const metrics = node("div", null, "metric-section");
   metrics.append(node("p", "历史回放误差 · 与持久性基线比较", "small-heading"));
   metricCards(metrics, data.metrics);
   target.append(metrics);
+  const caution = baselineCaution(data.metrics, "当前历史回放");
+  if (caution) target.append(caution);
+  const validation = data.validation_context;
+  const validity =
+    {
+      independent_time: "独立时间段",
+      overlap: "与模型来源重叠，非独立验证",
+      unknown: "独立性未知，不可当作独立验证",
+    }[validation?.status] || "独立性未知，不可当作独立验证";
+  target.append(
+    node(
+      "p",
+      `回放验证关系：${validity}。${validation?.message || "模型来源或时间范围信息不足。"}`,
+      "result-note caution",
+    ),
+  );
   target.append(
     node(
       "p",
@@ -784,6 +1206,7 @@ function renderAnalysis(data) {
       "result-note caution",
     ),
   );
+  evaluation(target, data.event_evaluation, state.analysisRule);
   target.append(chartGrid(data));
   target.append(node("p", "目标时刻明细 · UTC 时间", "small-heading"));
   resultTable(
@@ -815,6 +1238,7 @@ function renderForecast(data) {
     ["预测目标步数", data.horizon ?? "—"],
     ["采样间隔", data.cadence || "—"],
   ]);
+  datasetSource(target);
   target.append(
     node(
       "p",
@@ -822,6 +1246,7 @@ function renderForecast(data) {
       "result-note",
     ),
   );
+  leadDisplay(target, data.lead_time, state.forecastRule);
   target.append(chartGrid(data, true));
   target.append(node("p", "观测及预测明细 · UTC 时间", "small-heading"));
   const rows = [
@@ -844,12 +1269,15 @@ function renderForecast(data) {
     rows,
   );
   const params = new URLSearchParams(bodyForSelection());
+  const xlsxParams = new URLSearchParams(params);
+  if (state.forecastRule)
+    xlsxParams.set("rule", JSON.stringify(state.forecastRule));
   for (const [id, format] of [
     ["forecast-csv", "csv"],
     ["forecast-xlsx", "xlsx"],
   ]) {
     const link = $(id);
-    link.href = `/api/forecast/export.${format}?${params}`;
+    link.href = `/api/forecast/export.${format}?${format === "xlsx" ? xlsxParams : params}`;
     link.classList.remove("disabled-link");
     link.setAttribute("aria-disabled", "false");
   }
@@ -859,23 +1287,29 @@ async function runAnalysis(event) {
   let body;
   try {
     body = bodyForSelection();
+    body.rule = formRule($("analysis-form"));
   } catch (error) {
     status("analysis-status", error.message, true);
     return;
   }
-  const key = selectionKey(),
+  const key = selectionKey() + ruleKey($("analysis-form")),
     requestId = ++state.analysisRequest;
   $("analysis-button").disabled = true;
   status("analysis-status", "正在计算逐窗口历史回放…");
   try {
     const data = await postJSON("/api/analyze", body);
-    if (requestId !== state.analysisRequest || key !== selectionKey()) return;
+    if (
+      requestId !== state.analysisRequest ||
+      key !== selectionKey() + ruleKey($("analysis-form"))
+    )
+      return;
     if (!Array.isArray(data.rows) || !data.rows.length)
       throw new Error(
         "没有可比较的历史目标时刻；请检查文件长度、模型窗口与采样间隔。",
       );
     state.analysis = data;
     state.analysisKey = key;
+    state.analysisRule = body.rule;
     renderAnalysis(data);
     status(
       "analysis-status",
@@ -893,17 +1327,22 @@ async function runForecast(event) {
   let body;
   try {
     body = bodyForSelection();
+    body.rule = formRule($("forecast-form"), true);
   } catch (error) {
     status("forecast-status", error.message, true);
     return;
   }
-  const key = selectionKey(),
+  const key = selectionKey() + ruleKey($("forecast-form")),
     requestId = ++state.forecastRequest;
   $("forecast-button").disabled = true;
   status("forecast-status", "正在根据最近观测计算未来时序…");
   try {
     const data = await postJSON("/api/forecast", body);
-    if (requestId !== state.forecastRequest || key !== selectionKey()) return;
+    if (
+      requestId !== state.forecastRequest ||
+      key !== selectionKey() + ruleKey($("forecast-form"))
+    )
+      return;
     if (
       !Array.isArray(data.history) ||
       !Array.isArray(data.forecast) ||
@@ -912,6 +1351,7 @@ async function runForecast(event) {
       throw new Error("预测响应缺少有效的时序结果。");
     state.forecast = data;
     state.forecastKey = key;
+    state.forecastRule = body.rule;
     renderForecast(data);
     status(
       "forecast-status",
@@ -925,7 +1365,11 @@ async function runForecast(event) {
   }
 }
 function exportAnalysis() {
-  if (!state.analysis || state.analysisKey !== selectionKey()) return;
+  if (
+    !state.analysis ||
+    state.analysisKey !== selectionKey() + ruleKey($("analysis-form"))
+  )
+    return;
   const lines = [
     [
       "timestamp",
@@ -933,6 +1377,13 @@ function exportAnalysis() {
       "predicted_temperature_c",
       "actual_dissolved_oxygen_mg_l",
       "predicted_dissolved_oxygen_mg_l",
+      "validation_status",
+      "validation_message",
+      "max_temp_c",
+      "min_do_mg_l",
+      "rule_source",
+      "dataset_source_name",
+      "dataset_source_reference",
     ],
   ];
   for (const row of state.analysis.rows)
@@ -942,13 +1393,27 @@ function exportAnalysis() {
       row.predicted_temperature_c,
       row.actual_dissolved_oxygen_mg_l,
       row.predicted_dissolved_oxygen_mg_l,
+      state.analysis.validation_context?.status ?? "unknown",
+      state.analysis.validation_context?.message ?? "",
+      state.analysisRule?.max_temp_c ?? "",
+      state.analysisRule?.min_do_mg_l ?? "",
+      state.analysisRule?.source ?? "",
+      currentDataset()?.provenance?.source_name ?? "",
+      currentDataset()?.provenance?.source_reference ?? "",
     ]);
   const csv =
     "\ufeff" +
     lines
       .map((row) =>
         row
-          .map((value) => `"${String(value ?? "").replaceAll('"', '""')}"`)
+          .map((value) => {
+            const raw =
+              typeof value === "string" &&
+              /^[\s\u0000-\u001f]*[=+\-@]/.test(value)
+                ? "'" + value
+                : String(value ?? "");
+            return `"${raw.replaceAll('"', '""')}"`;
+          })
           .join(","),
       )
       .join("\r\n");
@@ -969,7 +1434,10 @@ function download(blob, name) {
 }
 async function exportForecast(event, format) {
   event.preventDefault();
-  if (!state.forecast || state.forecastKey !== selectionKey()) {
+  if (
+    !state.forecast ||
+    state.forecastKey !== selectionKey() + ruleKey($("forecast-form"))
+  ) {
     status("forecast-status", "请先生成当前选定数据与模型的预测。", true);
     return;
   }
@@ -991,6 +1459,8 @@ async function exportForecast(event, format) {
       );
     }
     const blob = await response.blob();
+    if (state.forecastKey !== selectionKey() + ruleKey($("forecast-form")))
+      return;
     download(blob, `ocean-forecast.${format}`);
     status("forecast-status", `${format.toUpperCase()} 下载已开始。`);
   } catch (error) {
@@ -1030,6 +1500,19 @@ for (const prefix of ["analysis", "forecast"]) {
   $(prefix + "-depth").addEventListener("change", (event) =>
     choose("depth", event.target.value),
   );
+}
+for (const id of ["train-file", "analysis-file"])
+  $(id).addEventListener("change", clearResults);
+for (const id of ["analysis-form", "forecast-form"]) {
+  for (const name of [
+    "max_temp_c",
+    "min_do_mg_l",
+    "rule_source",
+    "action_minutes",
+  ]) {
+    const input = $(id).elements.namedItem(name);
+    if (input) input.addEventListener("input", clearResults);
+  }
 }
 $("train-upload-form").addEventListener("submit", (event) => {
   event.preventDefault();

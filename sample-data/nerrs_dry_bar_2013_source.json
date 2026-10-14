@@ -10,6 +10,10 @@
     "F_Temp": "<0>",
     "F_DO_mgl": "<0>"
   },
+  "qc_columns_in_export": [
+    "F_Temp",
+    "F_DO_mgl"
+  ],
   "numeric_screen": "Finite Temp in [-2, 40] °C and DO_mgl in [0, 30] mg/L; an additional plausibility screen, not a species safety threshold.",
   "sampling_interval": "15 minutes; no interpolation or filled gaps",
   "timestamp_processing": "Source fixed local standard time GMT-5 shifted +5 hours to explicit UTC; SWMPr notes no daylight savings in SWMP data.",

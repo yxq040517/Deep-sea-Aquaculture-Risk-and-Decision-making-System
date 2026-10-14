@@ -69,6 +69,8 @@ def prepare(archive: bytes, output: Path) -> tuple[int, int]:
         "depth_m": NOMINAL_DEPTH_M,
         "temperature_c": selected["Temp"].to_numpy(),
         "dissolved_oxygen_mg_l": selected["DO_mgl"].to_numpy(),
+        "F_Temp": selected["F_Temp"].astype("string").str.strip().to_numpy(),
+        "F_DO_mgl": selected["F_DO_mgl"].astype("string").str.strip().to_numpy(),
     })
     output.mkdir(parents=True, exist_ok=True)
     prepared.iloc[:split].to_csv(output / OUTPUT_NAMES[0], index=False, encoding="utf-8-sig")
@@ -82,6 +84,7 @@ def prepare(archive: bytes, output: Path) -> tuple[int, int]:
         "parameters_reference": "https://cdmo.baruch.sc.edu/data/parameters.cfm",
         "time_reference": "https://cran.r-project.org/web/packages/SWMPr/refman/SWMPr.html",
         "source_flags_retained": {"F_Temp": "<0>", "F_DO_mgl": "<0>"},
+        "qc_columns_in_export": ["F_Temp", "F_DO_mgl"],
         "numeric_screen": "Finite Temp in [-2, 40] °C and DO_mgl in [0, 30] mg/L; an additional plausibility screen, not a species safety threshold.",
         "sampling_interval": "15 minutes; no interpolation or filled gaps",
         "timestamp_processing": "Source fixed local standard time GMT-5 shifted +5 hours to explicit UTC; SWMPr notes no daylight savings in SWMP data.",

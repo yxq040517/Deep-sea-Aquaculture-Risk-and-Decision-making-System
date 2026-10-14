@@ -136,9 +136,16 @@ def _require_positive_integer(value: int, name: str) -> None:
         raise ValueError(f"{name} must be a positive integer.")
 
 
-def _partition_bounds(length: int) -> dict[str, tuple[int, int]]:
-    train_end = int(length * 0.70)
-    validation_end = int(length * 0.85)
+def _partition_bounds(
+    length: int, timestamps: pd.Series, year_splits: tuple[int, int] | None = None
+) -> dict[str, tuple[int, int]]:
+    if year_splits is None:
+        train_end = int(length * 0.70)
+        validation_end = int(length * 0.85)
+    else:
+        years = timestamps.dt.year.to_numpy()
+        train_end = int(np.searchsorted(years, year_splits[0]))
+        validation_end = int(np.searchsorted(years, year_splits[1]))
     return {
         "train": (0, train_end),
         "validation": (train_end, validation_end),
@@ -180,15 +187,24 @@ def train_lstm(
     horizon: int = 6,
     epochs: int = 20,
     progress: Callable[[str], None] | None = None,
+    *,
+    split_mode: str = "chronological",
+    source_sha256: str | None = None,
 ) -> dict:
     """Train on chronological series, retain best validation loss, and report held-out MAEs."""
     for name, value in (("lookback", lookback), ("horizon", horizon), ("epochs", epochs)):
         _require_positive_integer(value, name)
     data, cadence_ns = _prepare_frame(frame)
+    if split_mode not in ("chronological", "year_holdout"):
+        raise ValueError("split_mode must be chronological or year_holdout.")
+    years = sorted(int(year) for year in data["timestamp"].dt.year.unique())
+    if split_mode == "year_holdout" and len(years) < 3:
+        raise ValueError("Independent-year evaluation needs at least three calendar years of observations.")
+    year_splits = (years[-2], years[-1]) if split_mode == "year_holdout" else None
     groups: list[tuple[str, float, np.ndarray, dict[str, tuple[int, int]]]] = []
     site_details: list[dict] = []
     for (site, depth), group in data.groupby(["site", "depth_m"], sort=True):
-        bounds = _partition_bounds(len(group))
+        bounds = _partition_bounds(len(group), group["timestamp"], year_splits)
         counts = {
             partition: len(_window_indices(*limits, lookback, horizon))
             for partition, limits in bounds.items()
@@ -209,6 +225,16 @@ def train_lstm(
                 "train_samples": counts["train"],
                 "validation_samples": counts["validation"],
                 "test_samples": counts["test"],
+                "source_start": group["timestamp"].iloc[0].isoformat(),
+                "source_end": group["timestamp"].iloc[-1].isoformat(),
+                "split_periods": {
+                    partition: {
+                        "start": group["timestamp"].iloc[start].isoformat(),
+                        "end": group["timestamp"].iloc[stop - 1].isoformat(),
+                        "years": sorted(int(year) for year in group["timestamp"].iloc[start:stop].dt.year.unique()),
+                    }
+                    for partition, (start, stop) in bounds.items()
+                },
             }
         )
 
@@ -280,6 +306,8 @@ def train_lstm(
         "lookback": lookback,
         "horizon": horizon,
         "epochs": epochs,
+        "split_mode": split_mode,
+        "training_source_sha256": source_sha256,
         "cadence": str(pd.Timedelta(cadence_ns, unit="ns")),
         "cadence_ns": cadence_ns,
         "sites": site_details,
