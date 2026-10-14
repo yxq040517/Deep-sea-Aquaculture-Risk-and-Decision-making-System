@@ -6,11 +6,11 @@
 
 ## 启动平台
 
-1. 在 `F:\project\深海养殖风险与决策` 安装 [uv](https://docs.astral.sh/uv/) 并运行 `uv sync --python 3.10`。首次安装 PyTorch 可能需要较大下载量。
-2. 双击 `启动工具.cmd`。脚本直接使用本项目的 `.venv\Scripts\python.exe`，不依赖资源管理器能否找到 `uv`。
+1. 安装 [uv](https://docs.astral.sh/uv/)，确保 `uv.exe` 可在命令行使用。**不需要事先手动创建 `.venv`**。
+2. 在项目根目录双击 `启动工具.cmd`。如果缺少 `.venv\Scripts\python.exe`，脚本会先依据 `uv.lock` 运行 `uv sync --locked --python 3.10` 安装依赖，再启动平台；首次安装 PyTorch 可能需要较大下载量。若找不到 `uv.exe` 或安装失败，命令窗口会停留并显示具体原因。
 3. 程序会在本机 `127.0.0.1` **自动选择可用端口**并打开浏览器；命令窗口会打印 `Platform address: http://127.0.0.1:端口/`。若浏览器未自动打开，将该地址复制到浏览器。关闭命令窗口即停止平台。
 
-也可从项目目录运行 `uv run --python 3.10 python main.py`。如果启动失败，命令窗口会保留错误信息；不要直接打开 `web/index.html`，因为它需要本机 API 提供真实数据与模型。
+也可在项目根目录手动运行 `uv sync --locked --python 3.10`，然后执行 `uv run --python 3.10 python main.py`。不要直接打开 `web/index.html`，因为它需要本机 API 提供真实数据与模型。
 
 ## 观测文件
 
