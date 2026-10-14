@@ -1,0 +1,425 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light" />
+    <title>深海观测 · 时序建模工作台</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+    <script src="/static/app.js" defer></script>
+  </head>
+  <body>
+    <aside class="sidebar" aria-label="工作台导航">
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true">≋</span
+        ><span><strong>深海观测</strong><small>时序建模工作台</small></span>
+      </div>
+      <div class="side-label">工作流程 / WORKFLOW</div>
+      <nav class="nav" aria-label="页面">
+        <button
+          type="button"
+          class="nav-item active"
+          data-page="train"
+          aria-current="page"
+        >
+          <span class="nav-number">01</span>模型训练
+        </button>
+        <button type="button" class="nav-item" data-page="analyze">
+          <span class="nav-number">02</span>数据分析
+        </button>
+        <button type="button" class="nav-item" data-page="forecast">
+          <span class="nav-number">03</span>未来预测
+        </button>
+      </nav>
+      <div class="side-foot">
+        <span class="signal" aria-hidden="true"></span>本地运行 · CPU 模型<br /><span
+          class="side-muted"
+          >观测数据不离开本机服务</span
+        >
+      </div>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <span>OCEAN OBSERVATION / RESEARCH WORKSPACE</span
+        ><span class="topbar-right"
+          >本地时序实验室 <span aria-hidden="true">↗</span></span
+        >
+      </header>
+      <div
+        id="global-message"
+        class="notice"
+        role="status"
+        aria-live="polite"
+        hidden
+      ></div>
+
+      <section id="page-train" class="page" aria-labelledby="heading-train">
+        <div class="page-intro">
+          <div>
+            <p class="eyebrow">01 / OBSERVATIONS → MODEL</p>
+            <h1 id="heading-train">模型训练</h1>
+            <p class="lede">
+              导入真实观测，设定时序窗口，在本机训练并保存 LSTM 模型。
+            </p>
+          </div>
+          <div class="intro-index" aria-hidden="true">01<span> / 03</span></div>
+        </div>
+        <div class="schema-strip">
+          <span class="schema-label"
+            >必需字段 <span aria-hidden="true">↗</span></span
+          ><code>timestamp</code><code>site</code><code>depth_m</code
+          ><code>temperature_c</code><code>dissolved_oxygen_mg_l</code>
+        </div>
+        <div class="two-column">
+          <div class="stack">
+            <section class="panel" aria-labelledby="upload-title">
+              <div class="panel-heading">
+                <span class="panel-step">数据导入</span>
+                <h2 id="upload-title">导入观测文件</h2>
+              </div>
+              <p class="muted">
+                CSV 或
+                XLSX；每组站点与水深须有等间隔的时间序列。导入后可供三个页面使用。
+              </p>
+              <form id="train-upload-form" class="upload-form">
+                <label for="train-file" class="field-label">选择本地文件</label
+                ><input
+                  id="train-file"
+                  name="file"
+                  type="file"
+                  accept=".csv,.xlsx"
+                  required
+                /><button type="submit" class="button button-primary">
+                  上传并校验 <span aria-hidden="true">↗</span>
+                </button>
+              </form>
+              <div
+                id="train-upload-status"
+                class="form-status"
+                role="status"
+                aria-live="polite"
+              ></div>
+            </section>
+            <section class="panel" aria-labelledby="dataset-title">
+              <div class="panel-heading">
+                <span class="panel-step">数据概览</span>
+                <h2 id="dataset-title">观测数据概览</h2>
+              </div>
+              <label for="train-dataset" class="field-label">训练数据集</label
+              ><select
+                id="train-dataset"
+                class="select"
+                aria-describedby="train-dataset-help"
+              ></select>
+              <p id="train-dataset-help" class="field-hint">
+                选择一份已导入的数据，核对覆盖范围与序列数。
+              </p>
+              <div id="dataset-preview" class="preview"></div>
+            </section>
+          </div>
+          <div class="stack">
+            <section class="panel" aria-labelledby="config-title">
+              <div class="panel-heading">
+                <span class="panel-step">时序参数</span>
+                <h2 id="config-title">设置时序窗口</h2>
+              </div>
+              <p class="muted">
+                历史窗口用于输入；预测步数定义未来目标长度。各序列按时间先后分为训练、验证与测试区间。
+              </p>
+              <form id="train-form">
+                <div class="config-grid">
+                  <label class="field-label" for="lookback"
+                    >历史窗口 · 条<input
+                      id="lookback"
+                      name="lookback"
+                      type="number"
+                      min="1"
+                      step="1"
+                      required /></label
+                  ><label class="field-label" for="horizon"
+                    >预测步数 · 条<input
+                      id="horizon"
+                      name="horizon"
+                      type="number"
+                      min="1"
+                      step="1"
+                      required /></label
+                  ><label class="field-label" for="epochs"
+                    >训练轮数<input
+                      id="epochs"
+                      name="epochs"
+                      type="number"
+                      min="1"
+                      step="1"
+                      required
+                  /></label>
+                </div>
+                <button
+                  id="train-button"
+                  type="submit"
+                  class="button button-primary button-wide"
+                >
+                  开始训练 <span aria-hidden="true">↗</span>
+                </button>
+              </form>
+              <div
+                id="train-status"
+                class="form-status"
+                role="status"
+                aria-live="polite"
+              ></div>
+              <div id="train-progress" class="progress-wrap" hidden>
+                <div class="progress-track">
+                  <div id="train-progress-fill" class="progress-fill"></div>
+                </div>
+                <p id="train-progress-text" class="field-hint"></p>
+              </div>
+            </section>
+            <section class="panel" aria-labelledby="models-title">
+              <div class="panel-heading">
+                <span class="panel-step">模型档案</span>
+                <h2 id="models-title">已保存模型</h2>
+              </div>
+              <label for="train-model" class="field-label"
+                >当前模型（分析与预测共用）</label
+              ><select id="train-model" class="select"></select>
+              <div id="model-preview" class="preview"></div>
+            </section>
+          </div>
+        </div>
+      </section>
+
+      <section
+        id="page-analyze"
+        class="page"
+        aria-labelledby="heading-analyze"
+        hidden
+      >
+        <div class="page-intro">
+          <div>
+            <p class="eyebrow">02 / HISTORICAL REPLAY</p>
+            <h1 id="heading-analyze">数据分析</h1>
+            <p class="lede">
+              对导入的历史观测进行逐窗口回放，比较模型目标时刻预测与真实测量值。
+            </p>
+          </div>
+          <div class="intro-index" aria-hidden="true">02<span> / 03</span></div>
+        </div>
+        <div class="callout callout-caution">
+          <strong>解读边界</strong
+          ><span
+            >若导入数据与模型训练数据重叠，历史回放并非独立验证；请结合留出的验证集、测试集指标解读。</span
+          >
+        </div>
+        <div class="two-column selection-layout">
+          <section class="panel" aria-labelledby="analysis-import-title">
+            <div class="panel-heading">
+              <span class="panel-step">历史导入</span>
+              <h2 id="analysis-import-title">导入待分析的历史观测</h2>
+            </div>
+            <form id="analysis-upload-form" class="upload-form">
+              <label for="analysis-file" class="field-label"
+                >CSV / XLSX 观测文件</label
+              ><input
+                id="analysis-file"
+                name="file"
+                type="file"
+                accept=".csv,.xlsx"
+                required
+              /><button type="submit" class="button button-secondary">
+                导入并选择文件 <span aria-hidden="true">↗</span>
+              </button>
+            </form>
+            <div
+              id="analysis-upload-status"
+              class="form-status"
+              role="status"
+              aria-live="polite"
+            ></div>
+            <p class="field-hint">
+              必需字段：timestamp · site · depth_m · temperature_c ·
+              dissolved_oxygen_mg_l
+            </p>
+          </section>
+          <section class="panel" aria-labelledby="analysis-select-title">
+            <div class="panel-heading">
+              <span class="panel-step">回放设置</span>
+              <h2 id="analysis-select-title">选择数据与模型</h2>
+            </div>
+            <form id="analysis-form" class="selection-form">
+              <label class="field-label" for="analysis-dataset"
+                >观测数据集<select
+                  id="analysis-dataset"
+                  class="select"
+                  required
+                ></select></label
+              ><label class="field-label" for="analysis-model"
+                >已保存模型<select
+                  id="analysis-model"
+                  class="select"
+                  required
+                ></select
+              ></label>
+              <div class="field-pair">
+                <label class="field-label" for="analysis-site"
+                  >站点<select
+                    id="analysis-site"
+                    class="select"
+                    required
+                  ></select></label
+                ><label class="field-label" for="analysis-depth"
+                  >水深 · m<select
+                    id="analysis-depth"
+                    class="select"
+                    required
+                  ></select
+                ></label>
+              </div>
+              <button
+                id="analysis-button"
+                class="button button-primary button-wide"
+                type="submit"
+              >
+                运行历史回放 <span aria-hidden="true">↗</span>
+              </button>
+            </form>
+            <div
+              id="analysis-status"
+              class="form-status"
+              role="status"
+              aria-live="polite"
+            ></div>
+          </section>
+        </div>
+        <section
+          id="analysis-results"
+          class="results"
+          aria-labelledby="analysis-results-title"
+        >
+          <div class="results-heading">
+            <div>
+              <p class="eyebrow">HISTORICAL COMPARISON</p>
+              <h2 id="analysis-results-title">回放结果</h2>
+            </div>
+            <button
+              id="analysis-export"
+              type="button"
+              class="button button-secondary"
+              disabled
+            >
+              导出回放 CSV ↗
+            </button>
+          </div>
+          <div id="analysis-output" class="result-body">
+            <p class="empty-state">
+              选择已导入的观测数据及模型后运行回放，这里将显示目标时刻的实测值、模型值及误差。
+            </p>
+          </div>
+        </section>
+      </section>
+
+      <section
+        id="page-forecast"
+        class="page"
+        aria-labelledby="heading-forecast"
+        hidden
+      >
+        <div class="page-intro">
+          <div>
+            <p class="eyebrow">03 / OBSERVED → FORECAST</p>
+            <h1 id="heading-forecast">未来预测</h1>
+            <p class="lede">
+              以选定站点与水深的最新观测为输入，延展水温和溶解氧时序。
+            </p>
+          </div>
+          <div class="intro-index" aria-hidden="true">03<span> / 03</span></div>
+        </div>
+        <div class="callout">
+          <strong>时序说明</strong
+          ><span
+            >实线表示已观测的历史；虚线表示模型生成的未来值。预测仅用于研究参考，不等同于现场测量。</span
+          >
+        </div>
+        <section class="panel" aria-labelledby="forecast-select-title">
+          <div class="panel-heading">
+            <span class="panel-step">预测设置</span>
+            <h2 id="forecast-select-title">选择数据与模型</h2>
+          </div>
+          <form id="forecast-form" class="selection-form inline-form">
+            <label class="field-label" for="forecast-dataset"
+              >观测数据集<select
+                id="forecast-dataset"
+                class="select"
+                required
+              ></select></label
+            ><label class="field-label" for="forecast-model"
+              >已保存模型<select
+                id="forecast-model"
+                class="select"
+                required
+              ></select></label
+            ><label class="field-label" for="forecast-site"
+              >站点<select
+                id="forecast-site"
+                class="select"
+                required
+              ></select></label
+            ><label class="field-label" for="forecast-depth"
+              >水深 · m<select
+                id="forecast-depth"
+                class="select"
+                required
+              ></select></label
+            ><button
+              id="forecast-button"
+              type="submit"
+              class="button button-primary"
+            >
+              生成未来预测 <span aria-hidden="true">↗</span>
+            </button>
+          </form>
+          <div
+            id="forecast-status"
+            class="form-status"
+            role="status"
+            aria-live="polite"
+          ></div>
+        </section>
+        <section
+          id="forecast-results"
+          class="results"
+          aria-labelledby="forecast-results-title"
+        >
+          <div class="results-heading">
+            <div>
+              <p class="eyebrow">FORECAST EXTENSION</p>
+              <h2 id="forecast-results-title">观测与未来时序</h2>
+            </div>
+            <div class="export-actions">
+              <a
+                id="forecast-csv"
+                class="button button-secondary disabled-link"
+                aria-disabled="true"
+                >下载 CSV ↗</a
+              ><a
+                id="forecast-xlsx"
+                class="button button-secondary disabled-link"
+                aria-disabled="true"
+                >下载 XLSX ↗</a
+              >
+            </div>
+          </div>
+          <div id="forecast-output" class="result-body">
+            <p class="empty-state">
+              选择数据集、模型与观测序列后生成预测；这里会并排呈现历史观测和未来数值。
+            </p>
+          </div>
+        </section>
+      </section>
+      <footer class="footer">
+        DEEP SEA OBSERVATION <span>·</span> 本地时序建模
+      </footer>
+    </main>
+  </body>
+</html>

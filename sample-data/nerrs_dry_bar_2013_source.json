@@ -1,0 +1,25 @@
+{
+  "source": "NOAA NERRS SWMP, Apalachicola Bay Dry Bar (apadbwq), 2013 water quality observations",
+  "source_url": "https://s3.amazonaws.com/swmpexdata/zip_ex.zip",
+  "source_member": "zip_ex/apadbwq2013.csv",
+  "source_sha256": "1a7fe2da8c39813198e565e8b9a9a1bb8bc061ea03ee3c9e6b0a2c21a80b51a3",
+  "official_station_metadata": "https://cdmo.baruch.sc.edu/waf/YearlyFiles/Apalachicola/water%20quality/metadata/apawq01-12.13m.pdf",
+  "parameters_reference": "https://cdmo.baruch.sc.edu/data/parameters.cfm",
+  "time_reference": "https://cran.r-project.org/web/packages/SWMPr/refman/SWMPr.html",
+  "source_flags_retained": {
+    "F_Temp": "<0>",
+    "F_DO_mgl": "<0>"
+  },
+  "numeric_screen": "Finite Temp in [-2, 40] °C and DO_mgl in [0, 30] mg/L; an additional plausibility screen, not a species safety threshold.",
+  "sampling_interval": "15 minutes; no interpolation or filled gaps",
+  "timestamp_processing": "Source fixed local standard time GMT-5 shifted +5 hours to explicit UTC; SWMPr notes no daylight savings in SWMP data.",
+  "nominal_depth_m": 1.7,
+  "nominal_depth_basis": "Station metadata reports approximately 2 m site depth and probe 0.3 m above bottom. This is a nominal below-surface grouping label; actual depth varies with tide. No per-observation depth is invented.",
+  "station_notes": "Estuarine oyster-bar monitoring station, not a salmon cage and not Bohai Bay. Original 2013 sample is marked provisional-plus in source; QA flag 0 is initial-pass, not proof of final authoritative review.",
+  "selection": "Longest uninterrupted 15-minute run with both Temp and DO_mgl flagged 0; first up to 1200 measured rows, chronological 75% training file and 25% independent holdout file.",
+  "first_utc": "2013-02-06T17:15:00Z",
+  "last_utc": "2013-02-19T05:00:00Z",
+  "rows_train": 900,
+  "rows_holdout": 300,
+  "citation": "NOAA National Estuarine Research Reserve System (NERRS), System-wide Monitoring Program; Apalachicola NERR Dry Bar; distributed with the CC0-licensed SWMPr example archive. Acknowledge the reserve if used in a publication."
+}
