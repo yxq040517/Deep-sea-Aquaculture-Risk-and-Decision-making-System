@@ -1141,7 +1141,7 @@ function leadDisplay(parent, lead, rule) {
       parent.append(
         node(
           "p",
-          "这份观测的预测时间已经过去；仅用于流程演示，不能作实时预警。",
+          "这份观测的预测时间已经过去；不能作为当前实时预警。",
           "result-note caution",
         ),
       );
